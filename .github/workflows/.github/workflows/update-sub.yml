@@ -1,0 +1,42 @@
+name: Daily Clash Sub Update
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 每天 UTC 08:00
+  workflow_dispatch:       # 手动触发按钮
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Search GitHub for public Clash YAML
+        run: |
+          # 用 GitHub CLI 搜索最近更新、star≥30 的 clash yaml
+          gh search code \
+            --filename '*.yaml' --filename '*.yml' \
+            --language yaml \
+            --sort updated \
+            --json repository,path,url \
+            --jq '.[] | select(.path | test("clash|sub|proxy"; "i")) | .repository.html_url + "/raw/HEAD/" + .path' \
+            > raw-urls.txt
+
+          # 取前 20 条并转成 HTML
+          head -n 20 raw-urls.txt | \
+          awk '{printf "<li><a href=\"%s\">订阅 %02d</a></li>\n", $0, NR}' \
+          > sub-list.html
+
+          # 最外层包 <ul>
+          sed -i '1i <ul>' sub-list.html
+          echo '</ul>' >> sub-list.html
+        env:
+          GH_TOKEN: ${{ github.token }}   # 已内置，无需额外 token
+
+      - name: Commit & Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sub-list.html
+          git commit -m "Auto update clash sub list $(date -u +%F)" || exit 0
+          git push
