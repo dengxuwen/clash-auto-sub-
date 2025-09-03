@@ -1,0 +1,32 @@
+# .github/workflows/update-sub.yml
+name: Daily Clash Sub Update
+
+on:
+  schedule:
+    # 每天 08:00 UTC（北京时间 16:00）跑
+    - cron: '0 8 * * *'
+  workflow_dispatch:   # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate sub list via Grok API
+        env:
+          GROK_TOKEN: ${{ secrets.GROK_TOKEN }}
+        run: |
+          curl -sS -X POST https://api.grok.com/v1/chat \
+            -H "Authorization: Bearer $GROK_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"prompt":"[角色] 顶级网络信息分析师，专注 Clash 免费订阅节点收集。[任务] 找到 20 条截止到今天仍有效的 Clash 公开订阅链接，仅输出 HTML 列表，不解释。[工具] 1.GitHub 代码搜索：ext:yaml \"proxies:\" site:raw.githubusercontent.com；2.过滤 404。[输出] <ul><li><a href=\"URL\">订阅1</a></li>...</ul>"}' \
+            -o sub-list.html
+
+      - name: Commit & Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sub-list.html
+          git commit -m "Auto update clash sub list $(date -u +%F)" || exit 0
+          git push
